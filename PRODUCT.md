@@ -1,10 +1,45 @@
-# Pathfinder Arena
+# Pathfinder Arena 2.0.0
 
-## Product
-A browser playground that compares A* and Dijkstra on the same user-editable grid. Visitors draw obstacles, move endpoints, watch synchronized search steps, and share maps. Actual shortest path results, rather than illustrative counts, drive the interface.
+## 产品目标
 
-## Platform and scope
-TypeScript, Vite, native DOM grids and SVG paths. Static GitHub Pages hosting. No backend, API keys, tracking, or uploaded personal data. Four-way movement, uniform edge costs, Manhattan heuristic. Educational visualization, not a wall-clock benchmark.
+让学习者通过同一张可编辑地图比较 A\* 与 Dijkstra，观察“当前选择、探索范围、最终代价”的关系。先预测，再单步观察，最后改变地图检验预测；演示结果来自真实搜索序列。
 
-## Acceptance
-Correct shortest paths verified with an independent BFS oracle; deterministic presets; share roundtrip with invalid-input checks; keyboard and pointer map editing; pause/step/reset; desktop and mobile QA; public repository and online demo.
+## 当前范围
+
+- 固定 35 × 23 四向网格。墙不可通行；进入普通格、沙地、水域分别消耗 1、5、9，起点自身不计成本。
+- A\* 使用 Manhattan 启发式；Dijkstra 使用 `h = 0`。返回最低总代价与路径，步数单独统计。
+- 两算法共享地图，各自记录有效出队的 current、`g / h / f`、唯一 frontier 数量及新发现节点。播放、暂停、单步、回放进度与倍速消费这些记录，不模拟虚构搜索数据。
+- 编辑工具覆盖墙、擦除、起终点和两种地形。地图变更使旧结果失效；一笔拖动作为一次历史操作，最多保留 50 个地图快照（含当前状态），支持撤销和重做。
+- 带种子的迷宫、散落障碍、空白地图，以及“代价更低的绕路”“直觉被墙挡住”“真的无路可走”三个教学场景。
+- 鼠标、触屏点按/绘制和键盘编辑；浏览/绘图切换、150%/200%/300% 放大、精确方向按钮，以及浏览器支持时的全屏。
+- localStorage 地图草稿、v1/v2 地图链接、JSON 地图导入/导出和当前双板 PNG 导出。
+
+## 结果与数据约定
+
+搜索结果的 `cost` 是最低总代价，不可达为 `null`；路径包含起终点，步数为路径节点数减一。“已探索”统计唯一有效出队节点，包含成功取出的终点，不包含失效堆条目。终点出队即结束，不继续展开其邻居。
+
+同图两种算法应得到相同的最优总代价，可能选择不同路径与步数。节点展开数、动画到达先后和播放速度都不能作为设备运行性能的测量。
+
+地图链接使用 URL fragment：普通地图沿用 v1，有加权地形时使用 v2；两者均校验尺寸范围、端点、墙与地形冲突。有效分享链接优先于本机草稿。分享只保存地图，不保存播放位置、选中工具或编辑历史。
+
+产品版本 **2.0.0** 与数据格式版本分开：JSON 导出使用 `version: 1`，包含 `cols`、`rows` 和 `board`，其中地图可以有地形。导入上限为 50,000 字节，非法输入不替换当前地图。PNG 是独立绘制的 1500 × 750 双板图，展示当前探索进度及已完成结果；它不是页面截图，也不是可恢复地图文件。
+
+## 运行与隐私边界
+
+TypeScript、Vite、原生 DOM 网格，部署为静态 GitHub Pages 网站。地图计算与文件处理在浏览器内完成，无地图上传 API、账号系统或应用内追踪。
+
+自动草稿仅位于当前站点的 localStorage；不可用时提示导出备份。页面刷新不保留撤销历史。JSON 与 PNG 通过用户发起的本地下载保存；地图链接可以由持有者读取，不提供私密分享权限。
+
+本版本不包含对角线、负权重、自定义成本、协作编辑或云端同步。教学场景给出观察问题，不评分，也不以看完动画推断学习者掌握算法。
+
+## 验收标准
+
+以下是应以实际测试确认的标准，不是测试通过记录：
+
+- 用独立最短路基准验证加权最优成本，覆盖绕路更便宜、不可达、同起终点、端点位于加权地形以及无权地图兼容。
+- 检查每步 current、frontier 与 `g / h / f` 一致，回退和重放不泄露未来状态，算法结果与播放速度无关。
+- 验证编辑历史、草稿恢复、v1/v2 链接和 JSON 往返；损坏输入与存储失败不破坏当前地图。
+- 在桌面与触屏视口验证点按、绘图、滚动、缩放、精确按钮、键盘、导入导出及复制失败回退。
+- 构建与 CI 通过后再确认公开部署；真实设备操作与整体可访问性仍需相应验证。
+
+算法及无障碍设计依据见 [REFERENCES.md](docs/REFERENCES.md)。

@@ -1,6 +1,6 @@
 {
   "name": "pathfinder-arena",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -9,12 +9,14 @@
     "test": "tsc -p tsconfig.test.json && node --test tests/*.test.mjs",
     "preview": "vite preview --host 127.0.0.1 --port 4184",
     "test:e2e": "playwright test",
-    "format": "prettier --write src tests index.html"
+    "format": "prettier --write src tests index.html",
+    "check": "tsc --noEmit && tsc -p tsconfig.e2e.json --noEmit"
   },
   "devDependencies": {
-    "@fontsource-variable/manrope": "^5.3.0",
     "@fontsource-variable/jetbrains-mono": "^5.3.0",
+    "@fontsource-variable/manrope": "^5.3.0",
     "@playwright/test": "^1.63.0",
+    "@types/node": "^22.20.1",
     "prettier": "^3.9.6",
     "typescript": "~5.9.3",
     "vite": "^7.3.6"

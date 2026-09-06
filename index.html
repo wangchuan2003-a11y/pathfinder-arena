@@ -49,6 +49,12 @@
         </div>
       </section>
       <section id="arena" class="arena" aria-label="寻路竞技场">
+        <div class="scenario-strip">
+          <span>从一个问题开始</span
+          ><button data-scenario="detour">代价更低的绕路</button
+          ><button data-scenario="barrier">直觉被墙挡住</button
+          ><button data-scenario="unreachable">真的无路可走</button>
+        </div>
         <div class="arena-toolbar">
           <div class="map-tabs" role="group" aria-label="地图预设">
             <button data-map="maze" aria-pressed="true">迷宫</button
@@ -81,8 +87,23 @@
               <i class="end-icon">G</i>终点
             </button>
           </div>
-          <button class="quiet" id="undo" disabled>撤销</button
-          ><span class="edit-hint">在任一地图拖动 · 两侧同步</span>
+          <button data-tool="sand" aria-pressed="false" class="terrain-tool">
+            沙地 ×5</button
+          ><button data-tool="water" aria-pressed="false" class="terrain-tool">
+            水域 ×9</button
+          ><button class="quiet" id="undo" disabled>撤销</button
+          ><button class="quiet" id="redo" disabled>重做</button
+          ><span id="map-state" class="edit-hint">可复现预设</span>
+        </div>
+        <div class="view-toolbar">
+          <button id="edit-mode" aria-pressed="true">绘图已开启</button
+          ><label for="zoom">地图缩放</label
+          ><select id="zoom">
+            <option value="1">适应屏幕</option>
+            <option value="1.5">150%</option>
+            <option value="2">200%</option>
+            <option value="3">300%</option></select
+          ><button id="fullscreen">全屏</button><span id="gesture-hint"></span>
         </div>
         <div class="boards">
           <article class="player blue">
@@ -109,10 +130,36 @@
                 ><small>个节点</small>
               </div>
               <div>
-                <span>路径长度</span><strong id="astar-cost">—</strong
+                <span>总代价</span><strong id="astar-cost">—</strong
+                ><small>单位</small>
+              </div>
+              <div>
+                <span>路径步数</span><strong id="astar-length">—</strong
                 ><small>步</small>
               </div>
-              <div class="strategy">距离起点的代价<br />+ 到终点的预估</div>
+            </div>
+            <div class="decision-panel">
+              <p id="astar-current">点击单步，观察每个决定</p>
+              <dl>
+                <div>
+                  <dt title="已知起点到当前格的累计代价">g · 已走代价</dt>
+                  <dd id="astar-g">—</dd>
+                </div>
+                <div>
+                  <dt title="A* 为曼哈顿距离；Dijkstra 不使用启发项">
+                    h · 预估剩余
+                  </dt>
+                  <dd id="astar-h">—</dd>
+                </div>
+                <div>
+                  <dt title="优先级 f = g + h">f · 优先级</dt>
+                  <dd id="astar-f">—</dd>
+                </div>
+                <div>
+                  <dt>待探索格</dt>
+                  <dd id="astar-frontier">—</dd>
+                </div>
+              </dl>
             </div>
           </article>
           <article class="player orange">
@@ -139,14 +186,53 @@
                 ><small>个节点</small>
               </div>
               <div>
-                <span>路径长度</span><strong id="dijkstra-cost">—</strong
+                <span>总代价</span><strong id="dijkstra-cost">—</strong
+                ><small>单位</small>
+              </div>
+              <div>
+                <span>路径步数</span><strong id="dijkstra-length">—</strong
                 ><small>步</small>
               </div>
-              <div class="strategy">按距离起点的代价<br />从小到大展开</div>
+            </div>
+            <div class="decision-panel">
+              <p id="dijkstra-current">点击单步，观察每个决定</p>
+              <dl>
+                <div>
+                  <dt title="已知起点到当前格的累计代价">g · 已走代价</dt>
+                  <dd id="dijkstra-g">—</dd>
+                </div>
+                <div>
+                  <dt title="A* 为曼哈顿距离；Dijkstra 不使用启发项">
+                    h · 预估剩余
+                  </dt>
+                  <dd id="dijkstra-h">—</dd>
+                </div>
+                <div>
+                  <dt title="优先级 f = g + h">f · 优先级</dt>
+                  <dd id="dijkstra-f">—</dd>
+                </div>
+                <div>
+                  <dt>待探索格</dt>
+                  <dd id="dijkstra-frontier">—</dd>
+                </div>
+              </dl>
             </div>
           </article>
         </div>
-        <div class="playback">
+        <details class="precise-editor">
+          <summary>精确点选：方向按钮 + 应用工具</summary>
+          <div class="precise-controls">
+            <span id="selection"></span>
+            <div class="direction-buttons">
+              <button data-move="up" aria-label="选中上方一格">↑</button
+              ><button data-move="left" aria-label="选中左方一格">←</button
+              ><button data-move="down" aria-label="选中下方一格">↓</button
+              ><button data-move="right" aria-label="选中右方一格">→</button
+              ><button id="apply-selected">应用当前工具</button>
+            </div>
+          </div>
+        </details>
+        <div class="playback" id="playback">
           <button id="run" class="run">开始对决 <span>▶</span></button
           ><button id="step">单步</button><button id="reset">重置回放</button>
           <div class="speed-control">
@@ -179,10 +265,24 @@
           <span><i class="legend-wall"></i>墙</span
           ><span><i class="legend-visited"></i>已探索</span
           ><span><i class="legend-path"></i>最终路径</span
+          ><span><i class="legend-frontier"></i>待探索</span
+          ><span><i class="legend-current"></i>当前节点</span
           ><span class="legend-note"
-            >四向移动 · 每步代价 1 · 同速回放展开节点</span
+            >四向移动 · 普通格 1 / 沙地 5 / 水域 9</span
           >
         </div>
+      </section>
+      <section class="file-toolbar" aria-label="地图文件">
+        <span id="save-state">草稿仅保存在此浏览器</span>
+        <button id="export-json">导出地图 JSON</button>
+        <button id="import-json">导入地图</button>
+        <button id="export-image">保存对照图片</button>
+        <input
+          id="map-file"
+          type="file"
+          accept=".json,application/json"
+          hidden
+        />
       </section>
       <section class="how" id="how">
         <div>
@@ -198,17 +298,19 @@
             </p>
           </div>
           <div class="principle">
-            <span class="principle-label">相同的最短距离</span>
+            <span class="principle-label">最低代价，不一定最少步数</span>
             <p>
-              在这里的四向、等代价地图上，两种算法都能找到最短路。路线可能不同；A*
+              在这里的四向地图上，两种算法都能找到最低总代价的路线。进入普通格消耗
+              1、沙地 5、水域 9；起点代价从 0 开始。路线和步数可能不同；A*
               也不保证在每张地图上都探索更少。
             </p>
           </div>
           <details>
             <summary>键盘操作与实验边界</summary>
             <p>
-              Tab 进入地图，方向键移动焦点，空格或 Enter
-              应用当前工具。起点与终点不能放在墙上；点击墙会先为端点清空该格。分享链接保存墙、端点和种子，不保存播放位置。地图完全在浏览器本地计算。实际运行速度取决于设备，播放速度仅用于观看。
+              P 播放/暂停，N 单步，1–6 切换工具，Ctrl/⌘ Z 撤销、Shift Z
+              重做。Tab 进入地图，方向键移动焦点，空格或 Enter
+              应用当前工具。起点与终点不能放在墙上；点击墙会先为端点清空该格。分享链接保存墙、地形、端点和种子，不保存播放位置。地图完全在浏览器本地计算。实际运行速度取决于设备，播放速度仅用于观看。
             </p>
           </details>
         </div>
@@ -223,6 +325,11 @@
         >
       </footer>
     </main>
+    <div class="mobile-dock" aria-label="快捷回放">
+      <button id="quick-run">开始对决</button>
+      <button id="quick-step">单步</button>
+      <a href="#playback">完整控件 ↑</a>
+    </div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

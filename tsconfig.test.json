@@ -1,5 +1,5 @@
 {
   "extends": "./tsconfig.json",
   "compilerOptions": { "noEmit": false, "outDir": ".test-build" },
-  "include": ["src/engine.ts"]
+  "include": ["src/engine.ts", "src/editor.ts", "src/scenarios.ts"]
 }

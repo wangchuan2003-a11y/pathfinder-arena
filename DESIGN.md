@@ -1,9 +1,36 @@
-# Design
+# 设计说明 · 2.0.0
 
-The surface is an interactive comparison arena. A pale page surrounds two dark, equally sized grids, with blue for A* and orange for Dijkstra. The same grid is edited on either side. Shared controls sit outside the paired boards so neither algorithm receives visual priority.
+## 比较关系
 
-## System
-Manrope and JetBrains Mono are self-hosted; CJK text uses the platform sans-serif. Page #f4f4f1, simulation surface #101723, blue #79a8ff, orange #ffb277. Walls and explored cells differ in tone; endpoints also use S/G text. The 35-column grid preserves square cells. Below 700px, the boards stack vertically. Keyboard focus uses an outline and each grid exposes a single Tab entry point.
+浅色页面围绕两块深色地图。A\* 使用蓝色，Dijkstra 使用橙色；两侧共享编辑输入、播放控制和网格尺度，以便对照同一步的选择。桌面并排，700px 以下垂直排列，手机上通过相同地图与统一回放保持比较关系。
 
-## Evidence
-Manual browser checks covered a complete default-maze run, map editing on both boards, undo, keyboard editing, sharing, and a 390px viewport width check. The screenshots are ordinary viewport captures at the arena scroll position, not evidence of every interaction or device. Algorithm correctness is checked independently against BFS. CI runs browser scenarios on desktop and mobile viewports. Expanded node counts are educational results, not wall-clock benchmarks.
+v2 在原有双板结构上追加教学场景、地形工具、视图控制、每步决策数字、精确点选和文件操作。主要阅读顺序是：选择问题或地图 → 编辑 → 观察两侧 → 检查结果与解释。精确方向操作放在可展开区域，减少默认工具密度。
+
+## 视觉系统
+
+页面底色为 `#f4f4f1`，地图面板为 `#101723`；A\* 面板强调色为 `#79a8ff`，Dijkstra 为 `#ffb277`。Manrope 和 JetBrains Mono 随应用自托管，中文回退到系统无衬线字体。数字采用等宽字体，方便比较探索数和代价。
+
+墙、普通地面、沙地、水域使用不同底色；沙地和水域带成本数字。探索与最终路径使用各算法的颜色，frontier 使用内边框，current 使用白色描边；精确选择使用金色边框。起终点另有 `S / G` 字符，颜色之外还保留位置和文字说明。
+
+网格保持 35 列与方格比例。地图可放大到 150%、200% 或 300%，由板内滚动容器承载；放大用于编辑精度，不改变算法尺度、图尺寸或地形成本。
+
+## 状态与解释
+
+每侧显示探索节点数、总代价、路径步数，以及当前节点的行列、`g / h / f` 和待探索格数。总代价与步数分开，避免用户把“绕得远”误认为“成本高”。Dijkstra 的 `h = 0`，不暗示它使用目标方向估计。
+
+动画按搜索步骤推进。每步数字与 frontier 来自同一步记录；结果仅在该侧结束后展示。修改地图清除旧搜索结果，重置回放保留地图，撤销/重做恢复地图快照。PNG 导出独立绘制当前双板状态与结果摘要，不承诺复刻页面所有边框、控件或决策数字。
+
+草稿状态、不可达、复制失败、文件无效与浏览器功能不支持，使用页面状态文本反馈。分享复制失败时提供地址栏手动复制路径；存储不可用时提示通过导出备份。
+
+## 输入与触屏
+
+- 每侧网格使用单一 Tab 入口，方向键移动可见焦点，Space/Enter 应用工具。格子的可访问名称包含行列、地形、端点与进入成本。
+- 精确方向按钮与应用工具按钮可通过单次点按完成编辑，方向按钮至少为 44 × 44 CSS 像素。它们也为密集的小格子提供替代操作。
+- 粗指针设备默认浏览模式；此模式让原生触摸滚动工作。绘图模式只在网格上接管触摸手势，用户可随时切回浏览。
+- 绘图支持逐格点按与连续拖动；起终点由工具加点选设置，不强制拖动标记。浏览器支持时可全屏，不支持时保留放大操作。
+
+这些措施对应具体操作需求，不等于完整 WCAG 合规证明。依据与适用范围见 [REFERENCES.md](docs/REFERENCES.md)。
+
+## 验证边界
+
+源代码说明交互如何设计；算法测试说明计算是否符合基准；浏览器测试和真机操作说明控件是否可用。截图只能展示某一时刻的布局，不能证明触屏滚动、键盘路径、回放一致性或所有设备上的可读性。新增控制较多，手机纵向密度、状态边框重叠和放大后的滚动仍应通过实际使用检验。

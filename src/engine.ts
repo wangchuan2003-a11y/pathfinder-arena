@@ -7,12 +7,28 @@ const WALL_TEXT_LENGTH = Math.ceil((WALL_BYTES * 8) / 6);
 const DEFAULT_START = COLS + 1;
 const DEFAULT_END = (ROWS - 2) * COLS + COLS - 2;
 
-/** Walls are unique cell indices; seed is an unsigned 32-bit integer. */
+export type Algorithm = "astar" | "dijkstra";
+export type TerrainCell = { cell: number; cost: 5 | 9 };
+
+/** Walls and terrain are unique, disjoint cells; seed is an unsigned uint32. */
 export type Board = {
   walls: number[];
+  /** Cost of entering each marked cell; every other open cell costs 1. */
+  terrain?: TerrainCell[];
   start: number;
   end: number;
   seed: number;
+};
+
+export type SearchStep = {
+  cell: number;
+  g: number;
+  h: number;
+  f: number;
+  /** Unique open cells after this expansion, excluding stale heap entries. */
+  frontier: number;
+  /** Cells discovered for the first time during this expansion. */
+  opened: number[];
 };
 
 export type SearchResult = {
@@ -20,7 +36,10 @@ export type SearchResult = {
   visited: number[];
   /** The route includes both endpoints; an unreachable route is empty. */
   path: number[];
+  /** Total movement cost; the starting cell itself contributes no cost. */
   cost: number | null;
+  /** One snapshot per actual expansion, in the same order as visited. */
+  steps: SearchStep[];
 };
 
 type FrontierEntry = {
@@ -88,10 +107,11 @@ function isSeed(value: number): boolean {
   return Number.isInteger(value) && value >= 0 && value <= 0xffffffff;
 }
 
-function wallMask(board: Board): Uint8Array {
+function boardMasks(board: Board): { walls: Uint8Array; costs: Uint8Array } {
   if (
     !board ||
     !Array.isArray(board.walls) ||
+    board.walls.length > CELL_COUNT ||
     !isCell(board.start) ||
     !isCell(board.end) ||
     !isSeed(board.seed)
@@ -99,17 +119,37 @@ function wallMask(board: Board): Uint8Array {
     throw new TypeError("Invalid board or seed.");
   }
 
-  const mask = new Uint8Array(CELL_COUNT);
+  const walls = new Uint8Array(CELL_COUNT);
   for (const wall of board.walls) {
-    if (!isCell(wall) || mask[wall]) {
+    if (!isCell(wall) || walls[wall]) {
       throw new TypeError("Walls must be unique, in-range cell indices.");
     }
-    mask[wall] = 1;
+    walls[wall] = 1;
   }
-  if (mask[board.start] || mask[board.end]) {
+  if (walls[board.start] || walls[board.end]) {
     throw new TypeError("Start and end must be open cells.");
   }
-  return mask;
+  const costs = new Uint8Array(CELL_COUNT).fill(1);
+  if (board.terrain !== undefined) {
+    if (!Array.isArray(board.terrain) || board.terrain.length > CELL_COUNT) {
+      throw new TypeError("Terrain must be an array of unique weighted cells.");
+    }
+    for (const terrain of board.terrain) {
+      if (
+        !terrain ||
+        !isCell(terrain.cell) ||
+        (terrain.cost !== 5 && terrain.cost !== 9) ||
+        walls[terrain.cell] ||
+        costs[terrain.cell] !== 1
+      ) {
+        throw new TypeError(
+          "Terrain must be unique open cells with cost 5 or 9.",
+        );
+      }
+      costs[terrain.cell] = terrain.cost;
+    }
+  }
+  return { walls, costs };
 }
 
 /** A fixed neighbor order makes repeated runs and equal-priority ties stable. */
@@ -124,26 +164,25 @@ function neighbors(cell: number): number[] {
   return adjacent;
 }
 
-export function solve(
-  board: Board,
-  algorithm: "astar" | "dijkstra",
-): SearchResult {
+export function solve(board: Board, algorithm: Algorithm): SearchResult {
   if (algorithm !== "astar" && algorithm !== "dijkstra") {
     throw new TypeError("Unknown search algorithm.");
   }
-  const walls = wallMask(board);
+  const { walls, costs } = boardMasks(board);
   const distances = new Int32Array(CELL_COUNT).fill(-1);
   const parents = new Int32Array(CELL_COUNT).fill(-1);
   const closed = new Uint8Array(CELL_COUNT);
   const visited: number[] = [];
+  const steps: SearchStep[] = [];
   const frontier = new MinHeap();
   const goalX = board.end % COLS;
   const goalY = Math.floor(board.end / COLS);
   let order = 0;
+  let openCount = 1;
 
-  // Every move changes Manhattan distance by at most one. On this four-way,
-  // unit-cost grid it is admissible and consistent, even in the presence of
-  // walls. Therefore the first goal removed from the heap is a shortest path.
+  // Each four-way move changes Manhattan distance by at most one and costs
+  // at least 1. Manhattan therefore remains admissible and consistent with
+  // costs 1/5/9 and walls; the first expanded goal has minimum total cost.
   const heuristic = (cell: number): number =>
     algorithm === "dijkstra"
       ? 0
@@ -167,19 +206,35 @@ export function solve(
     const { cell, distance } = entry;
     if (closed[cell] || distance !== distances[cell]) continue;
     closed[cell] = 1;
+    openCount--;
     visited.push(cell);
+
+    const step: SearchStep = {
+      cell,
+      g: distance,
+      h: entry.heuristic,
+      f: entry.priority,
+      frontier: openCount,
+      opened: [],
+    };
+    steps.push(step);
 
     if (cell === board.end) {
       const path: number[] = [];
       for (let step = cell; step !== -1; step = parents[step]) path.push(step);
       path.reverse();
-      return { visited, path, cost: distance };
+      return { visited, path, cost: distance, steps };
     }
 
     for (const next of neighbors(cell)) {
       if (walls[next] || closed[next]) continue;
-      const nextDistance = distance + 1;
+      // Pay for the destination terrain only; never charge the start itself.
+      const nextDistance = distance + costs[next];
       if (distances[next] !== -1 && nextDistance >= distances[next]) continue;
+      if (distances[next] === -1) {
+        openCount++;
+        step.opened.push(next);
+      }
       distances[next] = nextDistance;
       parents[next] = cell;
       const h = heuristic(next);
@@ -191,9 +246,10 @@ export function solve(
         order: order++,
       });
     }
+    step.frontier = openCount;
   }
 
-  return { visited, path: [], cost: null };
+  return { visited, path: [], cost: null, steps };
 }
 
 /** Mulberry32 keeps map generation independent of Math.random and time. */
@@ -290,41 +346,75 @@ export function createBoard(
 }
 
 /** Fixed-size bitset: 805 cells become 135 URL-safe characters. */
-export function encodeBoard(board: Board): string {
-  const walls = wallMask(board);
+function encodeMask(mask: Uint8Array): string {
   const bytes = new Uint8Array(WALL_BYTES);
   for (let cell = 0; cell < CELL_COUNT; cell++) {
-    if (walls[cell]) bytes[cell >> 3] |= 1 << (cell & 7);
+    if (mask[cell]) bytes[cell >> 3] |= 1 << (cell & 7);
   }
-  const payload = btoa(String.fromCharCode(...bytes))
+  return btoa(String.fromCharCode(...bytes))
     .replace(/\+/g, "-")
     .replace(/\//g, "_")
     .replace(/=+$/, "");
-  return `#v1.${board.start.toString(36)}.${board.end.toString(36)}.${board.seed.toString(36)}.${payload}`;
 }
 
-/** Accept only canonical v1 board hashes; malformed links never throw. */
-export function decodeBoard(hash: string): Board | null {
-  if (typeof hash !== "string" || hash.length > 160) return null;
-  const text = hash.startsWith("#") ? hash.slice(1) : hash;
-  const match =
-    /^v1\.([0-9a-z]{1,2})\.([0-9a-z]{1,2})\.([0-9a-z]{1,7})\.([A-Za-z0-9_-]+)$/.exec(
-      text,
+/** Unweighted boards keep their original v1 hashes, including empty terrain. */
+export function encodeBoard(board: Board): string {
+  const { walls, costs } = boardMasks(board);
+  const weighted = Boolean(board.terrain?.length);
+  const header = `#${weighted ? "v2" : "v1"}.${board.start.toString(36)}.${board.end.toString(36)}.${board.seed.toString(36)}`;
+  const payloads = [encodeMask(walls)];
+  if (weighted) {
+    // Separate fixed-size cost-5 and cost-9 sets make overlap detectable and
+    // bound even a completely painted map to 425 URL-safe characters.
+    payloads.push(
+      encodeMask(costs.map((cost) => (cost === 5 ? 1 : 0))),
+      encodeMask(costs.map((cost) => (cost === 9 ? 1 : 0))),
     );
-  if (!match || match[4].length !== WALL_TEXT_LENGTH) return null;
-  const start = Number.parseInt(match[1], 36);
-  const end = Number.parseInt(match[2], 36);
-  const seed = Number.parseInt(match[3], 36);
+  }
+  return `${header}.${payloads.join(".")}`;
+}
+
+/** Accept only canonical v1/v2 board hashes; malformed links never throw. */
+export function decodeBoard(hash: string): Board | null {
+  if (typeof hash !== "string" || hash.length > 425) return null;
+  const text = hash.startsWith("#") ? hash.slice(1) : hash;
+  const [version, startText, endText, seedText, ...payloads] = text.split(".");
+  if (
+    (version !== "v1" && version !== "v2") ||
+    payloads.length !== (version === "v1" ? 1 : 3) ||
+    !/^[0-9a-z]{1,2}$/.test(startText) ||
+    !/^[0-9a-z]{1,2}$/.test(endText) ||
+    !/^[0-9a-z]{1,7}$/.test(seedText) ||
+    payloads.some(
+      (payload) =>
+        payload.length !== WALL_TEXT_LENGTH ||
+        !/^[A-Za-z0-9_-]+$/.test(payload),
+    )
+  )
+    return null;
+  const start = Number.parseInt(startText, 36);
+  const end = Number.parseInt(endText, 36);
+  const seed = Number.parseInt(seedText, 36);
   if (!isCell(start) || !isCell(end) || !isSeed(seed)) return null;
 
   try {
-    const binary = atob(match[4].replace(/-/g, "+").replace(/_/g, "/") + "=");
-    if (binary.length !== WALL_BYTES) return null;
+    const binaries = payloads.map((payload) =>
+      atob(payload.replace(/-/g, "+").replace(/_/g, "/") + "="),
+    );
+    if (binaries.some((binary) => binary.length !== WALL_BYTES)) return null;
     const walls: number[] = [];
+    const terrain: TerrainCell[] = [];
     for (let cell = 0; cell < CELL_COUNT; cell++) {
-      if (binary.charCodeAt(cell >> 3) & (1 << (cell & 7))) walls.push(cell);
+      const occupied = binaries.map((binary) =>
+        Boolean(binary.charCodeAt(cell >> 3) & (1 << (cell & 7))),
+      );
+      if (occupied.filter(Boolean).length > 1) return null;
+      if (occupied[0]) walls.push(cell);
+      if (occupied[1]) terrain.push({ cell, cost: 5 });
+      if (occupied[2]) terrain.push({ cell, cost: 9 });
     }
     const board: Board = { walls, start, end, seed };
+    if (version === "v2") board.terrain = terrain;
     // Round-tripping rejects leading zeroes, nonzero unused bits, alternative
     // base64 encodings, and endpoints on walls through the shared validator.
     return encodeBoard(board).slice(1) === text ? board : null;
