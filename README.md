@@ -4,7 +4,7 @@
 
 [在线体验](https://wangchuan2003-a11y.github.io/pathfinder-arena/) · [更新记录](CHANGELOG.md) · [实现参考](docs/REFERENCES.md) · [报告问题](https://github.com/wangchuan2003-a11y/pathfinder-arena/issues)
 
-![加权地形与搜索决策面板](docs/v2-desktop.png)
+![加权地形与搜索决策面板](docs/v2-desktop.jpg)
 
 ## Language / 语言
 
