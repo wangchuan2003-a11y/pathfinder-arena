@@ -1,0 +1,228 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1.0" />
+    <meta name="theme-color" content="#101723" />
+    <meta
+      name="description"
+      content="画一张迷宫，让 A* 与 Dijkstra 同场寻路。实时对比搜索策略、逐步回放、分享你创造的地图。"
+    />
+    <title>Pathfinder Arena · 寻路竞技场</title>
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23101723'/%3E%3Cpath d='M16 46V18h30v14H30v14' stroke='%237cabff' stroke-width='7' fill='none'/%3E%3C/svg%3E"
+    />
+  </head>
+  <body>
+    <header>
+      <a href="./" class="brand"
+        ><span class="brand-symbol" aria-hidden="true">P<span>↗</span></span
+        >PATHFINDER <strong>ARENA</strong></a
+      >
+      <nav>
+        <a href="#how">如何运作</a
+        ><a
+          href="https://github.com/wangchuan2003-a11y/pathfinder-arena"
+          target="_blank"
+          rel="noopener"
+          >GitHub ↗</a
+        >
+      </nav>
+    </header>
+    <main>
+      <section class="hero">
+        <div>
+          <h1>同一张地图。<br /><span>两种寻路直觉。</span></h1>
+        </div>
+        <div class="hero-copy">
+          <p>
+            一边朝着目标前进，一边探索所有可能。<br />画下障碍，看算法如何做出选择。
+          </p>
+          <a class="jump" href="#arena">进入竞技场 <span>↓</span></a>
+        </div>
+        <div class="hero-art" aria-hidden="true">
+          <div class="art-route route-a"></div>
+          <div class="art-route route-b"></div>
+          <i class="art-point start-point"></i
+          ><i class="art-point end-point"></i>
+        </div>
+      </section>
+      <section id="arena" class="arena" aria-label="寻路竞技场">
+        <div class="arena-toolbar">
+          <div class="map-tabs" role="group" aria-label="地图预设">
+            <button data-map="maze" aria-pressed="true">迷宫</button
+            ><button data-map="scatter" aria-pressed="false">散落障碍</button
+            ><button data-map="empty" aria-pressed="false">空白画布</button>
+          </div>
+          <div class="seed-controls">
+            <label for="seed">SEED</label
+            ><input
+              type="number"
+              id="seed"
+              min="0"
+              max="4294967295"
+              value="42"
+            /><button id="regenerate" title="用当前种子重新生成地图">
+              重建</button
+            ><button id="shuffle">随机一张 ↗</button>
+          </div>
+        </div>
+        <div class="editor-toolbar">
+          <span>绘图工具</span>
+          <div class="tools" role="group" aria-label="绘图工具">
+            <button data-tool="wall" aria-pressed="true">
+              <i class="wall-icon"></i>画墙</button
+            ><button data-tool="erase" aria-pressed="false">
+              <i class="erase-icon"></i>擦除</button
+            ><button data-tool="start" aria-pressed="false">
+              <i class="start-icon">S</i>起点</button
+            ><button data-tool="end" aria-pressed="false">
+              <i class="end-icon">G</i>终点
+            </button>
+          </div>
+          <button class="quiet" id="undo" disabled>撤销</button
+          ><span class="edit-hint">在任一地图拖动 · 两侧同步</span>
+        </div>
+        <div class="boards">
+          <article class="player blue">
+            <div class="player-heading">
+              <div>
+                <span class="algorithm-tag">目标导向</span>
+                <h2>A<span>*</span></h2>
+              </div>
+              <div class="player-status" id="astar-state">等待出发</div>
+            </div>
+            <div class="board-wrap">
+              <div
+                id="astar-grid"
+                class="grid"
+                role="grid"
+                aria-label="A 星地图，可编辑"
+                aria-rowcount="23"
+                aria-colcount="35"
+              ></div>
+            </div>
+            <div class="player-stats">
+              <div>
+                <span>已探索</span><strong id="astar-visited">0</strong
+                ><small>个节点</small>
+              </div>
+              <div>
+                <span>路径长度</span><strong id="astar-cost">—</strong
+                ><small>步</small>
+              </div>
+              <div class="strategy">距离起点的代价<br />+ 到终点的预估</div>
+            </div>
+          </article>
+          <article class="player orange">
+            <div class="player-heading">
+              <div>
+                <span class="algorithm-tag">逐层探索</span>
+                <h2>Dijkstra</h2>
+              </div>
+              <div class="player-status" id="dijkstra-state">等待出发</div>
+            </div>
+            <div class="board-wrap">
+              <div
+                id="dijkstra-grid"
+                class="grid"
+                role="grid"
+                aria-label="Dijkstra 地图，可编辑"
+                aria-rowcount="23"
+                aria-colcount="35"
+              ></div>
+            </div>
+            <div class="player-stats">
+              <div>
+                <span>已探索</span><strong id="dijkstra-visited">0</strong
+                ><small>个节点</small>
+              </div>
+              <div>
+                <span>路径长度</span><strong id="dijkstra-cost">—</strong
+                ><small>步</small>
+              </div>
+              <div class="strategy">按距离起点的代价<br />从小到大展开</div>
+            </div>
+          </article>
+        </div>
+        <div class="playback">
+          <button id="run" class="run">开始对决 <span>▶</span></button
+          ><button id="step">单步</button><button id="reset">重置回放</button>
+          <div class="speed-control">
+            <label for="speed">速度</label
+            ><select id="speed">
+              <option value="20">0.5×</option>
+              <option value="40" selected>1×</option>
+              <option value="100">2.5×</option>
+              <option value="240">6×</option>
+            </select>
+          </div>
+          <button id="share">分享地图 ↗</button>
+        </div>
+        <div class="timeline">
+          <label for="timeline">回放进度</label
+          ><input
+            id="timeline"
+            type="range"
+            min="0"
+            max="1"
+            value="0"
+            step="1"
+            disabled
+          /><output id="timeline-value">0 / 0</output>
+        </div>
+        <div class="result-bar" role="status" aria-live="polite" id="result">
+          准备好了吗？先直接开始，再试着改变地图。
+        </div>
+        <div class="legend">
+          <span><i class="legend-wall"></i>墙</span
+          ><span><i class="legend-visited"></i>已探索</span
+          ><span><i class="legend-path"></i>最终路径</span
+          ><span class="legend-note"
+            >四向移动 · 每步代价 1 · 同速回放展开节点</span
+          >
+        </div>
+      </section>
+      <section class="how" id="how">
+        <div>
+          <h2>聪明的捷径，<br />有条件。</h2>
+          <p class="how-intro">这不是跑分。你看到的是算法展开节点的顺序。</p>
+        </div>
+        <div class="how-main">
+          <div class="principle">
+            <span class="principle-label">A* 的方向感</span>
+            <p>
+              A*
+              加入到终点的曼哈顿距离估计，优先搜索看起来更有希望的路线。障碍物可能让直觉失效，需要绕路。
+            </p>
+          </div>
+          <div class="principle">
+            <span class="principle-label">相同的最短距离</span>
+            <p>
+              在这里的四向、等代价地图上，两种算法都能找到最短路。路线可能不同；A*
+              也不保证在每张地图上都探索更少。
+            </p>
+          </div>
+          <details>
+            <summary>键盘操作与实验边界</summary>
+            <p>
+              Tab 进入地图，方向键移动焦点，空格或 Enter
+              应用当前工具。起点与终点不能放在墙上；点击墙会先为端点清空该格。分享链接保存墙、端点和种子，不保存播放位置。地图完全在浏览器本地计算。实际运行速度取决于设备，播放速度仅用于观看。
+            </p>
+          </details>
+        </div>
+      </section>
+      <footer>
+        <span>PATHFINDER ARENA</span><span>Draw. Explore. Understand.</span
+        ><a
+          href="https://github.com/wangchuan2003-a11y/pathfinder-arena"
+          target="_blank"
+          rel="noopener"
+          >开源，从这里开始 ↗</a
+        >
+      </footer>
+    </main>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
