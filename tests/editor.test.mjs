@@ -6,6 +6,7 @@ import {
   History,
   saveDraft,
   loadDraft,
+  clearDraft,
   mapToJSON,
   mapFromJSON,
 } from "../.test-build/editor.js";
@@ -276,6 +277,60 @@ test("malformed and unsupported drafts do not throw or write to storage", () => 
     assert.deepEqual(storage.reads, ["pathfinder-arena:draft"]);
     assert.deepEqual(storage.writes, []);
   }
+});
+
+test("clearing a draft preserves preferences and unrelated storage", () => {
+  const preferences = JSON.stringify({
+    version: 1,
+    locale: "en",
+    zoom: 3,
+    speed: 240,
+  });
+  const values = new Map([
+    ["pathfinder-arena:preferences", preferences],
+    ["unrelated-key", "retain me"],
+  ]);
+  const removals = [];
+  const storage = {
+    getItem: (key) => values.get(key) ?? null,
+    setItem: (key, value) => {
+      values.set(key, value);
+    },
+    removeItem: (key) => {
+      removals.push(key);
+      values.delete(key);
+    },
+  };
+  assert.equal(saveDraft(storage, state()), true);
+  assert.notEqual(loadDraft(storage), null);
+  assert.equal(clearDraft(storage), true);
+  assert.equal(loadDraft(storage), null);
+  assert.equal(values.get("pathfinder-arena:preferences"), preferences);
+  assert.equal(values.get("unrelated-key"), "retain me");
+  assert.equal(clearDraft(storage), true, "clearing an absent draft is safe");
+  assert.deepEqual(removals, [
+    "pathfinder-arena:draft",
+    "pathfinder-arena:draft",
+  ]);
+});
+
+test("clearing a draft handles denied or unavailable removal without reading other data", () => {
+  const removals = [];
+  const storage = {
+    getItem() {
+      assert.fail("clearDraft should not read storage");
+    },
+    setItem() {
+      assert.fail("clearDraft should not write storage");
+    },
+    removeItem(key) {
+      removals.push(key);
+      throw new Error("SecurityError: denied");
+    },
+  };
+  assert.equal(clearDraft(storage), false);
+  assert.deepEqual(removals, ["pathfinder-arena:draft"]);
+  assert.equal(clearDraft(memoryStorage()), false);
 });
 
 test("readable JSON round-trips walls, endpoints, seed, and weighted terrain", () => {

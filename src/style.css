@@ -1242,3 +1242,120 @@ button:hover:not(:disabled) {
     scroll-margin-bottom: 85px;
   }
 }
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+#locale {
+  border: 1px solid #c2cede;
+  color: #39516e;
+  background: #f9fbff;
+  border-radius: 6px;
+  padding: 7px 9px;
+  font-size: 11px;
+  min-height: 34px;
+  max-width: 110px;
+}
+.draft-manager {
+  width: 100%;
+  padding-top: 10px;
+  margin-top: 2px;
+}
+.draft-manager p {
+  font-size: 12px;
+  max-width: 75ch;
+  color: #607088;
+  line-height: 1.7;
+}
+.draft-manager button {
+  margin-right: 8px;
+  margin-bottom: 5px;
+}
+.draft-manager summary {
+  font-size: 12px;
+}
+.cell.selected {
+  box-shadow: inset 0 0 0 2px #f5cf84;
+}
+.cell.selected.current {
+  outline: 2px solid white;
+  outline-offset: -2px;
+}
+html[lang="en"] .hero h1 {
+  font-size: clamp(36px, 4.2vw, 60px);
+}
+html[lang="en"] .hero-copy p {
+  max-width: 340px;
+}
+html[lang="en"] .scenario-strip button {
+  font-size: 11px;
+}
+html[lang="en"] .tools button {
+  font-size: 11px;
+}
+html[lang="en"] .editor-toolbar {
+  gap: 8px;
+}
+html[lang="en"] .player-stats {
+  gap: 10px;
+}
+html[lang="en"] .decision-panel dt {
+  font-size: 10px;
+}
+html[lang="en"] .view-toolbar #gesture-hint {
+  font-size: 10px;
+}
+@media (max-width: 700px) {
+  header nav {
+    gap: 10px;
+  }
+  .brand {
+    font-size: 10px;
+  }
+  #locale {
+    font-size: 10px;
+    max-width: 88px;
+  }
+  html[lang="en"] .hero h1 {
+    font-size: 40px;
+  }
+  html[lang="en"] .hero-copy {
+    display: block;
+  }
+  html[lang="en"] .hero-copy .jump {
+    display: inline-flex;
+    align-items: center;
+    margin-top: 12px;
+  }
+  html[lang="en"] .scenario-strip button {
+    font-size: 10px;
+  }
+  html[lang="en"] .tools button {
+    font-size: 10px;
+    padding: 8px;
+  }
+  html[lang="en"] .mobile-dock button {
+    padding: 8px 11px;
+    font-size: 11px;
+  }
+  html[lang="en"] .mobile-dock a {
+    font-size: 10px;
+  }
+  html[lang="en"] .decision-panel dl {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 13px;
+  }
+}
+@media (max-width: 700px) {
+  header nav a[href="#how"] {
+    display: none;
+  }
+}

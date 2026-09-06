@@ -498,7 +498,7 @@ test("a weighted draft survives reload and a v2 share overrides a different loca
   expect(await snapshot(page, "astar")).not.toEqual(edited);
   await page.goto("about:blank");
   await page.goto(sharedURL);
-  await expect(page.locator("#result")).toContainText("已载入分享地图");
+  await expect(page.locator("#result")).toContainText("分享地图已载入");
   for (const algorithm of algorithms)
     expect(await snapshot(page, algorithm)).toEqual(edited);
 });
@@ -761,4 +761,263 @@ test("late file reads cannot overwrite newer edits or a more recent import", asy
   await expect(page.locator("#result")).toContainText("地图已导入");
   for (const algorithm of algorithms)
     expect(await snapshot(page, algorithm)).toEqual(latest);
+});
+
+test("switching languages preserves edited cells and the current replay", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await page.locator('[data-map="empty"]').click();
+  await page.locator('[data-tool="water"]').click();
+  const cell = page.locator('#astar-grid [data-index="37"]');
+  await cell.press("Space");
+  const originalCell = await cell.elementHandle();
+  const board = await snapshot(page, "astar");
+  await page.locator("#step").click();
+  await page.locator("#step").click();
+  const replay = await page.locator("#timeline").inputValue();
+  const statistics = () =>
+    page.locator(".decision-panel dd, .player-stats strong").allTextContents();
+  const before = await statistics();
+
+  for (const locale of ["en", "zh-CN"]) {
+    await page.locator("#locale").selectOption(locale);
+    await expect(page.locator("html")).toHaveAttribute("lang", locale);
+    await expect(page).toHaveTitle(
+      locale === "en"
+        ? "Pathfinder Arena · Search laboratory"
+        : "Pathfinder Arena · 寻路竞技场",
+    );
+    await expect(page.locator("#timeline")).toHaveValue(replay);
+    expect(await statistics()).toEqual(before);
+    for (const algorithm of algorithms)
+      expect(await snapshot(page, algorithm)).toEqual(board);
+    expect(await originalCell!.evaluate((element) => element.isConnected)).toBe(
+      true,
+    );
+  }
+  await expect(cell).toHaveAttribute(
+    "aria-label",
+    "第 2 行，第 3 列，水域，进入代价 9",
+  );
+  await page.locator("#step").click();
+  for (const algorithm of algorithms)
+    await expect(page.locator(`#${algorithm}-visited`)).toHaveText("3");
+});
+
+test("English covers visible copy, accessible labels, and new status messages", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await page.locator("#locale").selectOption("en");
+  await expect(page.locator("h1")).toContainText("One map.");
+  await expect(page.locator("#step")).toHaveText("Step");
+  await expect(page.locator("#reset")).toHaveText("Reset replay");
+  await expect(page.locator("#astar-grid")).toHaveAttribute(
+    "aria-label",
+    "A* map, editable",
+  );
+  for (const selector of [
+    ".how details summary",
+    ".precise-editor summary",
+    ".draft-manager summary",
+  ]) {
+    await page.locator(selector).click();
+  }
+  const expectEnglish = async () => {
+    await expect
+      .poll(
+        () =>
+          page.evaluate(() => {
+            const untranslated: string[] = [];
+            const chinese = /\p{Script=Han}/u;
+            const walker = document.createTreeWalker(
+              document.body,
+              NodeFilter.SHOW_TEXT,
+            );
+            for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+              const parent = node.parentElement;
+              if (!parent || parent.closest("#locale, script, style")) continue;
+              if (!chinese.test(node.textContent ?? "")) continue;
+              const range = document.createRange();
+              range.selectNodeContents(node);
+              if (range.getClientRects().length)
+                untranslated.push(node.textContent!.trim());
+            }
+            for (const element of Array.from(
+              document.querySelectorAll(
+                "[aria-label], [title], [placeholder], [alt]",
+              ),
+            )) {
+              if (element.closest("#locale")) continue;
+              for (const attribute of [
+                "aria-label",
+                "title",
+                "placeholder",
+                "alt",
+              ]) {
+                const value = element.getAttribute(attribute);
+                if (value && chinese.test(value))
+                  untranslated.push(`${attribute}: ${value}`);
+              }
+            }
+            return untranslated.slice(0, 20);
+          }),
+        {
+          message:
+            "English UI must not retain Chinese outside the language menu",
+        },
+      )
+      .toEqual([]);
+  };
+  await expectEnglish();
+  await page.locator('[data-scenario="detour"]').click();
+  await page.locator("#step").click();
+  await expect(page.locator("#result")).toContainText("Expansion 1.");
+  await expectEnglish();
+  await page.locator("#timeline").press("End");
+  await expect(page.locator("#result")).toContainText(
+    "Finished: both minimum costs are 36.",
+  );
+  await expectEnglish();
+  await page.locator("#map-file").setInputFiles({
+    name: "invalid.json",
+    mimeType: "application/json",
+    buffer: Buffer.from("{}"),
+  });
+  await expect(page.locator("#result")).toContainText("Invalid map file.");
+  await expectEnglish();
+});
+
+test("preferences survive reload and clearing a draft leaves the map and settings alone", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await page.locator('[data-map="empty"]').click();
+  await page.locator('#astar-grid [data-index="37"]').press("Space");
+  const edited = await snapshot(page, "astar");
+  await page.locator("#locale").selectOption("en");
+  await page.locator("#zoom").selectOption("1.5");
+  await page.locator("#speed").selectOption("100");
+  await page.reload();
+  for (const [id, value] of [
+    ["locale", "en"],
+    ["zoom", "1.5"],
+    ["speed", "100"],
+  ]) {
+    await expect(page.locator(`#${id}`)).toHaveValue(value);
+  }
+  await expect(page.locator("html")).toHaveAttribute("lang", "en");
+  for (const algorithm of algorithms)
+    expect(await snapshot(page, algorithm)).toEqual(edited);
+  await page.locator(".draft-manager summary").click();
+  await page.locator("#clear-draft").click();
+  await expect(page.locator("#result")).toContainText("Local draft cleared.");
+  await expect(page.locator("#restore-draft")).toBeDisabled();
+  for (const algorithm of algorithms)
+    expect(await snapshot(page, algorithm)).toEqual(edited);
+  const readDraft = () =>
+    page.evaluate(() => localStorage.getItem("pathfinder-arena:draft"));
+  expect(await readDraft()).toBeNull();
+
+  await page.locator("#run").click();
+  await expect(page.locator("#run")).toContainText("Pause");
+  await page.locator("#run").click();
+  await page.locator("#reset").click();
+  await page.locator("#locale").selectOption("zh-CN");
+  await page.locator("#locale").selectOption("en");
+  expect(await readDraft()).toBeNull();
+  expect(
+    await page.evaluate(() =>
+      JSON.parse(localStorage.getItem("pathfinder-arena:preferences")!),
+    ),
+  ).toEqual({ version: 1, locale: "en", zoom: 1.5, speed: 100 });
+
+  await page.reload();
+  expect((await snapshot(page, "astar")).walls.length).toBeGreaterThan(0);
+  await expect(page.locator("#locale")).toHaveValue("en");
+  await expect(page.locator("#zoom")).toHaveValue("1.5");
+  await expect(page.locator("#speed")).toHaveValue("100");
+  expect(await readDraft()).toBeNull();
+  await page.locator('[data-tool="sand"]').click();
+  await page.locator('#astar-grid [data-index="38"]').press("Space");
+  await expect(page.locator("#save-state")).toContainText(
+    "Draft saved in this browser",
+  );
+  expect(await readDraft()).not.toBeNull();
+});
+
+test("a shared map can recover the draft that existed before this page opened", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await page.locator('[data-map="empty"]').click();
+  await page.locator('[data-tool="water"]').click();
+  await page.locator('#astar-grid [data-index="38"]').press("Space");
+  const shared = await snapshot(page, "astar");
+  await page.locator("#share").click();
+  await expect(page).toHaveURL(/#v2\./);
+  const sharedURL = page.url();
+
+  await page.locator('[data-map="empty"]').click();
+  await page.locator('[data-tool="wall"]').click();
+  await page.locator('#astar-grid [data-index="37"]').press("Space");
+  const earlierDraft = await snapshot(page, "astar");
+  await page.goto("about:blank");
+  await page.goto(sharedURL);
+  for (const algorithm of algorithms)
+    expect(await snapshot(page, algorithm)).toEqual(shared);
+  await page.locator(".draft-manager summary").click();
+  await expect(page.locator("#restore-draft")).toBeEnabled();
+
+  await page.locator('#astar-grid [data-index="40"]').press("Space");
+  expect((await snapshot(page, "astar")).walls).toEqual([40]);
+  await expect(page.locator("#save-state")).toContainText(
+    "草稿已保存在此浏览器",
+  );
+  await page.locator("#restore-draft").click();
+  for (const algorithm of algorithms)
+    expect(await snapshot(page, algorithm)).toEqual(earlierDraft);
+  await expect(page.locator("#restore-draft")).toBeDisabled();
+  await expect(page.locator("#result")).toContainText("已恢复");
+});
+
+test("precise selection stays marked after edits and step announcements describe both decisions", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await page.locator('[data-map="empty"]').click();
+  await page.locator(".precise-editor summary").click();
+  await page.locator('[data-move="right"]').click();
+  await page.locator('[data-tool="sand"]').click();
+  await page.locator("#apply-selected").click();
+  const expectSelection = async () => {
+    for (const algorithm of algorithms) {
+      const selected = page.locator(`#${algorithm}-grid .selected`);
+      await expect(selected).toHaveCount(1);
+      await expect(selected).toHaveAttribute("data-index", "37");
+      await expect(selected).toHaveClass(/\bsand\b/);
+    }
+  };
+  await expectSelection();
+  const result = page.locator("#result");
+  await expect(result).toHaveAttribute("role", "status");
+  await expect(result).toHaveAttribute("aria-live", "polite");
+  await page.locator("#step").click();
+  await expect(result).toHaveText(
+    "第 1 次展开。A* 当前格 37，g 0，h 52，f 52；Dijkstra 当前格 37，g 0，h 0，f 0。",
+  );
+  await expectSelection();
+  await page.locator("#timeline").press("Home");
+  await expectSelection();
+  await page.locator("#locale").selectOption("en");
+  await page.locator("#step").click();
+  await expect(result).toHaveText(
+    "Expansion 1. A* cell 37: g 0, h 52, f 52; Dijkstra cell 37: g 0, h 0, f 0.",
+  );
+  await expectSelection();
+  await expect(page.locator('#astar-grid [data-index="37"]')).toHaveAttribute(
+    "aria-label",
+    "Row 2, column 3, Sand, Entry cost 5",
+  );
 });

@@ -17,9 +17,17 @@ import {
   loadDraft,
   mapToJSON,
   mapFromJSON,
+  clearDraft,
   type Tool,
   type EditorSnapshot,
 } from "./editor";
+import {
+  loadPreferences,
+  savePreferences,
+  DEFAULT_PREFERENCES,
+} from "./preferences";
+import { Localization } from "./localization";
+import { localeFrom } from "./i18n";
 import { createScenario, scenarioText, type Scenario } from "./scenarios";
 const $ = <T extends HTMLElement>(id: string) =>
   document.getElementById(id) as T;
@@ -34,7 +42,13 @@ try {
   /* Private browsing may disable storage. */
 }
 const shared = decodeBoard(location.hash);
-const draft = namedAnchor() && storage ? loadDraft(storage) : null;
+const savedDraft = storage ? loadDraft(storage) : null;
+const draft = namedAnchor() ? savedDraft : null;
+let recoverableDraft = savedDraft;
+const preferences = storage
+  ? loadPreferences(storage)
+  : { ...DEFAULT_PREFERENCES };
+let localization: Localization | undefined;
 const initial: EditorSnapshot = shared
   ? { board: shared, preset: "custom" }
   : (draft ?? { board: createBoard("maze", 42), preset: "maze" });
@@ -132,8 +146,12 @@ function paintBase() {
 function updateSelection(focus: boolean) {
   $("selection").textContent = label(selected);
   for (const a of algorithms) {
-    for (const cell of cells[a]) cell.tabIndex = -1;
+    for (const cell of cells[a]) {
+      cell.tabIndex = -1;
+      cell.classList.remove("selected");
+    }
     cells[a][selected].tabIndex = 0;
+    cells[a][selected].classList.add("selected");
   }
   if (focus) {
     cells[selectedAlgorithm][selected].focus();
@@ -144,6 +162,13 @@ function updateSelection(focus: boolean) {
   }
 }
 function controls() {
+  const hasRecovery =
+    !!recoverableDraft &&
+    encodeBoard(recoverableDraft.board) !== encodeBoard(board);
+  $<HTMLButtonElement>("restore-draft").disabled = !hasRecovery;
+  $("draft-notice").textContent = hasRecovery
+    ? "仍可恢复进入此页面前的草稿。"
+    : "";
   const finished = !!results && frame >= maximum;
   $("run").innerHTML = running
     ? "暂停 <span>Ⅱ</span>"
@@ -298,8 +323,17 @@ function step() {
   prepare();
   frame = Math.min(maximum, frame + 1);
   paintProgress();
-  if (frame < maximum)
-    report(`第 ${frame} 次展开。比较当前节点的 g、h、f 与待探索数量。`);
+  if (frame < maximum && results) {
+    const a =
+      results.astar.steps[Math.min(frame, results.astar.steps.length) - 1];
+    const d =
+      results.dijkstra.steps[
+        Math.min(frame, results.dijkstra.steps.length) - 1
+      ];
+    report(
+      `第 ${frame} 次展开。A* 当前格 ${a.cell + 1}，g ${a.g}，h ${a.h}，f ${a.f}；Dijkstra 当前格 ${d.cell + 1}，g ${d.g}，h ${d.h}，f ${d.f}。`,
+    );
+  }
 }
 function selectTool(next: Tool) {
   tool = next;
@@ -513,7 +547,42 @@ $("zoom").addEventListener("change", () => {
     "--grid-scale",
     $<HTMLSelectElement>("zoom").value,
   );
+  preferences.zoom = Number(
+    $<HTMLSelectElement>("zoom").value,
+  ) as typeof preferences.zoom;
+  persistPreferences();
 });
+function persistPreferences() {
+  if (storage) savePreferences(storage, preferences);
+}
+$("speed").addEventListener("change", () => {
+  preferences.speed = Number(
+    $<HTMLSelectElement>("speed").value,
+  ) as typeof preferences.speed;
+  persistPreferences();
+});
+$("locale").addEventListener("change", () => {
+  preferences.locale = localeFrom($<HTMLSelectElement>("locale").value);
+  localization?.setLocale(preferences.locale);
+  document.title =
+    preferences.locale === "en"
+      ? "Pathfinder Arena · Search laboratory"
+      : "Pathfinder Arena · 寻路竞技场";
+  persistPreferences();
+});
+$("restore-draft").onclick = () => {
+  if (recoverableDraft) adopt(recoverableDraft, "已恢复本机保存的地图。");
+  else report("未找到可恢复的草稿。");
+};
+$("clear-draft").onclick = () => {
+  endStroke();
+  if (storage && clearDraft(storage)) {
+    recoverableDraft = null;
+    $("save-state").textContent = "本机草稿已清除";
+    controls();
+    report("已清除本机草稿，当前地图仍可导出。");
+  } else report("无法清除草稿，浏览器可能禁用了存储。");
+};
 document.querySelectorAll<HTMLButtonElement>("[data-move]").forEach(
   (b) =>
     (b.onclick = () => {
@@ -723,7 +792,16 @@ function tick(now: number) {
 }
 setEditMode(editMode);
 clearSearch();
-if (shared) report("已载入分享地图，包含保存的地形与起终点。");
+if (shared) report("分享地图已载入；编辑将更新本机草稿。");
 else if (draft) report("已恢复此浏览器上次的地图草稿。");
 else if (!namedAnchor()) report("分享链接无效，已载入默认迷宫。");
+$<HTMLSelectElement>("locale").value = preferences.locale;
+$<HTMLSelectElement>("zoom").value = String(preferences.zoom);
+$<HTMLSelectElement>("speed").value = String(preferences.speed);
+$("arena").style.setProperty("--grid-scale", String(preferences.zoom));
+localization = new Localization(document.body, preferences.locale);
+document.title =
+  preferences.locale === "en"
+    ? "Pathfinder Arena · Search laboratory"
+    : "Pathfinder Arena · 寻路竞技场";
 requestAnimationFrame(tick);

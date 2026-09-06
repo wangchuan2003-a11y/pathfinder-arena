@@ -195,6 +195,18 @@ export function loadDraft(storage: DraftStorage): EditorSnapshot | null {
   }
 }
 
+/** Remove the map draft only; preferences and other browser data remain intact. */
+export function clearDraft(
+  storage: DraftStorage & { removeItem(key: string): void },
+): boolean {
+  try {
+    storage.removeItem(DRAFT_KEY);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /** Export readable board data with explicit schema and grid dimensions. */
 export function mapToJSON(board: Board): string {
   const validated = decodeBoard(encodeBoard(board));

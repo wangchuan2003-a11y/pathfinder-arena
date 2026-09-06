@@ -1,5 +1,11 @@
 {
   "extends": "./tsconfig.json",
   "compilerOptions": { "noEmit": false, "outDir": ".test-build" },
-  "include": ["src/engine.ts", "src/editor.ts", "src/scenarios.ts"]
+  "include": [
+    "src/engine.ts",
+    "src/editor.ts",
+    "src/scenarios.ts",
+    "src/i18n.ts",
+    "src/preferences.ts"
+  ]
 }

@@ -31,3 +31,9 @@ The follow-up fixes numeric tool shortcuts, P and N when the grid itself has key
 Commit d86e02c passed the full pipeline, including 32 core tests and all 24 browser cases with the grid-focus keyboard regression. CI and Pages deployment: https://github.com/wangchuan2003-a11y/pathfinder-arena/actions/runs/34045226503 . The published website was opened successfully; the detour scenario rendered 105 weighted cells and the first A* step showed g=0, h=28, with no browser console errors. This closes the pending verification above.
 
 The next run should work from v2.0.1, the current repository state, and the candidate list above. Do not repeat the completed v2 research or rebuild the existing features.
+
+## 2026-09-07 — v2.1.0 candidate
+
+Added source-preserving Chinese/English DOM localization, independently validated language/zoom/speed preferences, explicit recovery of the draft present when the page opened, and a clear-draft operation that leaves preferences/current map intact. Precise cell selection now survives edits/replays; manual single-step announcements contain both algorithms' current cell and g/h/f values.
+
+Local evidence: 52 pure tests and app/browser TypeScript checks passed. English static leaf text and dynamic result/cell-label translations were inspected in the browser, including switching back to Chinese without losing the map/replay. CI now contains 34 desktop/mobile cases, including language state preservation and draft lifecycle. Await this candidate's CI and deployment before recording it as verified.

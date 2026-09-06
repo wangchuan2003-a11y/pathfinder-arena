@@ -1,10 +1,16 @@
 # Pathfinder Arena
 
-**v2.0.1 · 同一张地图，两种寻路策略。画下障碍和地形，看 A\* 与 Dijkstra 如何选择路线。**
+**v2.1.0 · 同一张地图，两种寻路策略。画下障碍和地形，看 A\* 与 Dijkstra 如何选择路线。**
 
 [在线体验](https://wangchuan2003-a11y.github.io/pathfinder-arena/) · [更新记录](CHANGELOG.md) · [实现参考](docs/REFERENCES.md) · [报告问题](https://github.com/wangchuan2003-a11y/pathfinder-arena/issues)
 
 ![加权地形与搜索决策面板](docs/v2-desktop.png)
+
+## Language / 语言
+
+Use the language selector to switch between English and Simplified Chinese without resetting your map or replay. Language, zoom and speed are stored only in this browser.
+
+语言菜单可随时切换中文和英文；草稿管理可恢复进入页面前的地图，或清除已保存的草稿。清除不会删除当前画面，也不会重置语言等偏好。
 
 ## 可以做什么
 
