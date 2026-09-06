@@ -37,3 +37,7 @@ The next run should work from v2.0.1, the current repository state, and the cand
 Added source-preserving Chinese/English DOM localization, independently validated language/zoom/speed preferences, explicit recovery of the draft present when the page opened, and a clear-draft operation that leaves preferences/current map intact. Precise cell selection now survives edits/replays; manual single-step announcements contain both algorithms' current cell and g/h/f values.
 
 Local evidence: 52 pure tests and app/browser TypeScript checks passed. English static leaf text and dynamic result/cell-label translations were inspected in the browser, including switching back to Chinese without losing the map/replay. CI now contains 34 desktop/mobile cases, including language state preservation and draft lifecycle. Await this candidate's CI and deployment before recording it as verified.
+
+## 2026-09-07 — v2.1.0 verified
+
+Commit dc72049 passed 52 pure tests, app/browser TypeScript checks, production build and all 34 desktop/mobile browser cases. Pages deployment succeeded: https://github.com/wangchuan2003-a11y/pathfinder-arena/actions/runs/34046773146 . This closes the v2.1.0 candidate checks above. The bilingual interaction and draft lifecycle were exercised by the new browser scenarios.
