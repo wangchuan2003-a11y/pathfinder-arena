@@ -1,6 +1,6 @@
 # Pathfinder Arena
 
-**v2.0.0 · 同一张地图，两种寻路策略。画下障碍和地形，看 A\* 与 Dijkstra 如何选择路线。**
+**v2.0.1 · 同一张地图，两种寻路策略。画下障碍和地形，看 A\* 与 Dijkstra 如何选择路线。**
 
 [在线体验](https://wangchuan2003-a11y.github.io/pathfinder-arena/) · [更新记录](CHANGELOG.md) · [实现参考](docs/REFERENCES.md) · [报告问题](https://github.com/wangchuan2003-a11y/pathfinder-arena/issues)
 

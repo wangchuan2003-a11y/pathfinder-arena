@@ -19,3 +19,9 @@ Continue only after checking the latest CI/deployment and repository state. Prio
 5. Profile actual editing/replay operations before optimizing the DOM. Keep algorithm results and replay timing distinct.
 
 Do not introduce accounts, remote data collection, API credentials, or dependencies without a concrete need. Keep every published increment tested and reversible. Record only verifiable results here.
+
+## 2026-09-07 — v2.0.0 verified, v2.0.1 keyboard follow-up
+
+v2.0.0 commit 9ac70ca passed the complete GitHub Actions run: 32 Node tests, TypeScript app/browser checks, production build, and 24 desktop/mobile browser cases. Pages deployment succeeded. Evidence: https://github.com/wangchuan2003-a11y/pathfinder-arena/actions/runs/34044991527 .
+
+The follow-up fixes numeric tool shortcuts, P and N when the grid itself has keyboard focus. A manual check confirmed selecting sand, applying it and stepping from a focused gridcell. The existing browser scenario now covers this full sequence without adding a duplicate test group. Its new CI and published-site verification are pending; check the newest run before marking this follow-up released.

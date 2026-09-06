@@ -689,8 +689,7 @@ window.addEventListener("keydown", (event) => {
     redo();
     return;
   }
-  if (event.ctrlKey || event.metaKey || event.altKey || target.closest(".cell"))
-    return;
+  if (event.ctrlKey || event.metaKey || event.altKey) return;
   if (event.key.toLowerCase() === "p") {
     event.preventDefault();
     toggleRun();

@@ -208,6 +208,35 @@ test("pointer and keyboard edits synchronize both grids and can be undone", asyn
   expect(await snapshot(page, "astar")).toEqual(
     await snapshot(page, "dijkstra"),
   );
+
+  const keyboardCell = page.locator('#astar-grid [data-index="38"]');
+  await keyboardCell.focus();
+  await keyboardCell.press("5");
+  await expect(page.locator('[data-tool="sand"]')).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
+  await keyboardCell.press("Space");
+  for (const algorithm of algorithms) {
+    await expect(
+      page.locator(`#${algorithm}-grid [data-index="38"]`),
+    ).toHaveClass(/\bsand\b/);
+  }
+  await keyboardCell.press("n");
+  for (const algorithm of algorithms) {
+    await expect(page.locator(`#${algorithm}-visited`)).toHaveText("1");
+    await expect(page.locator(`#${algorithm}-g`)).toHaveText("0");
+    await expect(page.locator(`#${algorithm}-f`)).toHaveText(
+      algorithm === "astar" ? "52" : "0",
+    );
+  }
+  await keyboardCell.press("p");
+  await expect(page.locator("#run")).toContainText("暂停");
+  await keyboardCell.press("p");
+  await expect(page.locator("#run")).toContainText("继续对决");
+  await expect(keyboardCell).toBeFocused();
+  await page.locator("#reset").click();
+  await expect(page.locator("#timeline")).toBeDisabled();
 });
 
 test("moving endpoints onto a wall clears it and coincident endpoints cost zero", async ({
