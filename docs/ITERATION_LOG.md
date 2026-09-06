@@ -25,3 +25,9 @@ Do not introduce accounts, remote data collection, API credentials, or dependenc
 v2.0.0 commit 9ac70ca passed the complete GitHub Actions run: 32 Node tests, TypeScript app/browser checks, production build, and 24 desktop/mobile browser cases. Pages deployment succeeded. Evidence: https://github.com/wangchuan2003-a11y/pathfinder-arena/actions/runs/34044991527 .
 
 The follow-up fixes numeric tool shortcuts, P and N when the grid itself has keyboard focus. A manual check confirmed selecting sand, applying it and stepping from a focused gridcell. The existing browser scenario now covers this full sequence without adding a duplicate test group. Its new CI and published-site verification are pending; check the newest run before marking this follow-up released.
+
+## 2026-09-07 — v2.0.1 verified and published
+
+Commit d86e02c passed the full pipeline, including 32 core tests and all 24 browser cases with the grid-focus keyboard regression. CI and Pages deployment: https://github.com/wangchuan2003-a11y/pathfinder-arena/actions/runs/34045226503 . The published website was opened successfully; the detour scenario rendered 105 weighted cells and the first A* step showed g=0, h=28, with no browser console errors. This closes the pending verification above.
+
+The next run should work from v2.0.1, the current repository state, and the candidate list above. Do not repeat the completed v2 research or rebuild the existing features.
