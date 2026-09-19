@@ -13,6 +13,7 @@ import {
 import {
   History,
   applyTool,
+  applyStroke,
   saveDraft,
   loadDraft,
   mapToJSON,
@@ -74,6 +75,8 @@ let wallSet = new Set(board.walls),
   terrain = new Map(board.terrain?.map((t) => [t.cell, t.cost]));
 let dragging = false,
   strokeChanged = false;
+let strokePointer: number | null = null,
+  lastStrokeCell: number | null = null;
 let editMode = !matchMedia("(pointer: coarse)").matches;
 let selected = board.start,
   selectedAlgorithm: Algorithm = "astar";
@@ -353,6 +356,8 @@ function editSingle(index: number) {
 function endStroke() {
   if (!dragging) return;
   dragging = false;
+  strokePointer = null;
+  lastStrokeCell = null;
   if (strokeChanged) {
     preset = "custom";
     history.commit({ board, preset });
@@ -392,7 +397,7 @@ for (const a of algorithms) {
   }
   grid.addEventListener("pointerdown", (e) => {
     const event = e as PointerEvent;
-    if (event.button !== 0 || !editMode) return;
+    if (event.button !== 0 || !event.isPrimary || !editMode) return;
     const target = (event.target as Element).closest<HTMLButtonElement>(
       ".cell",
     );
@@ -403,6 +408,8 @@ for (const a of algorithms) {
     selectedAlgorithm = a;
     dragging = true;
     strokeChanged = false;
+    strokePointer = event.pointerId;
+    lastStrokeCell = selected;
     clearSearch();
     const next = applyTool(board, selected, tool);
     if (next !== board) {
@@ -412,23 +419,37 @@ for (const a of algorithms) {
     }
     grid.setPointerCapture(event.pointerId);
   });
-  grid.addEventListener("pointermove", (e) => {
-    if (!dragging) return;
-    const event = e as PointerEvent,
-      target = document
-        .elementFromPoint(event.clientX, event.clientY)
-        ?.closest<HTMLButtonElement>(".cell");
-    if (!target || !grid.contains(target)) return;
+  function paintPointer(event: PointerEvent) {
+    if (!dragging || event.pointerId !== strokePointer) return;
+    const hit = document.elementFromPoint(event.clientX, event.clientY),
+      target = hit?.closest<HTMLButtonElement>(".cell");
+    if (!hit || !grid.contains(hit)) {
+      // Re-entering after moving outside the board starts a new segment.
+      lastStrokeCell = null;
+      return;
+    }
+    if (!target) return;
     selected = Number(target.dataset.index);
-    const next = applyTool(board, selected, tool);
+    const next = applyStroke(board, lastStrokeCell ?? selected, selected, tool);
+    lastStrokeCell = selected;
     if (next !== board) {
       board = next;
       strokeChanged = true;
       paintBase();
     }
+  }
+  grid.addEventListener("pointermove", (event) =>
+    paintPointer(event as PointerEvent),
+  );
+  grid.addEventListener("pointerup", (event) => {
+    if ((event as PointerEvent).pointerId !== strokePointer) return;
+    paintPointer(event as PointerEvent);
+    endStroke();
   });
-  for (const event of ["pointerup", "pointercancel", "lostpointercapture"])
-    grid.addEventListener(event, endStroke);
+  for (const event of ["pointercancel", "lostpointercapture"])
+    grid.addEventListener(event, (event) => {
+      if ((event as PointerEvent).pointerId === strokePointer) endStroke();
+    });
   grid.addEventListener("focusin", (e) => {
     const target = (e.target as Element).closest<HTMLButtonElement>(".cell");
     if (target) {
@@ -470,7 +491,9 @@ for (const a of algorithms) {
     updateSelection(true);
   });
 }
-window.addEventListener("pointerup", endStroke);
+window.addEventListener("pointerup", (event) => {
+  if (event.pointerId === strokePointer) endStroke();
+});
 window.addEventListener("blur", endStroke);
 document
   .querySelectorAll<HTMLButtonElement>("[data-tool]")
@@ -664,6 +687,7 @@ $("map-file").addEventListener("change", async () => {
   }
 });
 $("export-image").onclick = () => {
+  const filename = `pathfinder-${board.seed}.png`;
   const canvas = document.createElement("canvas");
   canvas.width = 1500;
   canvas.height = 750;
@@ -732,7 +756,7 @@ $("export-image").onclick = () => {
   ctx.fillText("wangchuan2003-a11y.github.io/pathfinder-arena", 30, 704);
   canvas.toBlob((blob) => {
     if (blob) {
-      download(blob, `pathfinder-${board.seed}.png`);
+      download(blob, filename);
       report("当前双板结果已导出为 PNG。");
     } else report("图片导出失败，请重试。");
   });
