@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { COLS, ROWS, createBoard, encodeBoard } from "../.test-build/engine.js";
 import {
   applyTool,
+  applyStroke,
   History,
   saveDraft,
   loadDraft,
@@ -15,6 +16,42 @@ const empty = () => createBoard("empty", 42);
 const state = (board = empty(), preset = "empty") => ({ board, preset });
 const sameBoard = (actual, expected) =>
   assert.equal(encodeBoard(actual), encodeBoard(expected));
+
+test("fast strokes fill crossed cells and close exact diagonal corners in either direction", () => {
+  const board = empty();
+  const horizontal = Array.from({ length: 26 }, (_, i) => 72 + i);
+  assert.deepEqual(applyStroke(board, 72, 97, "wall").walls, horizontal);
+  assert.deepEqual(applyStroke(board, 97, 72, "wall").walls, horizontal);
+  const diagonal = [
+    72, 73, 107, 108, 109, 143, 144, 145, 179, 180, 181, 215, 216,
+  ];
+  assert.deepEqual(applyStroke(board, 72, 216, "wall").walls, diagonal);
+  assert.deepEqual(applyStroke(board, 216, 72, "wall").walls, diagonal);
+  const shallow = [72, 73, 74, 109, 110, 111];
+  assert.deepEqual(applyStroke(board, 72, 111, "wall").walls, shallow);
+  assert.deepEqual(applyStroke(board, 111, 72, "wall").walls, shallow);
+});
+
+test("stroke tools preserve endpoints, clear terrain, and move endpoints only at the destination", () => {
+  const board = {
+    ...empty(),
+    walls: [72, 73, 74],
+    terrain: [{ cell: 75, cost: 9 }],
+  };
+  const moved = applyStroke(board, 72, 75, "start");
+  assert.equal(moved.start, 75);
+  assert.deepEqual(moved.walls, [72, 73, 74]);
+  const painted = applyStroke(board, 72, 75, "sand");
+  assert.deepEqual(painted.walls, []);
+  assert.deepEqual(
+    painted.terrain,
+    [72, 73, 74, 75].map((cell) => ({ cell, cost: 5 })),
+  );
+  assert.deepEqual(applyStroke(painted, 72, 75, "erase").terrain, []);
+  assert.deepEqual(applyStroke(empty(), 35, 37, "wall").walls, [35, 37]);
+  assert.equal(applyStroke(board, -1, 20, "wall"), board);
+  assert.equal(applyStroke(board, 20, COLS * ROWS, "wall"), board);
+});
 
 function freeze(value) {
   if (value && typeof value === "object") {

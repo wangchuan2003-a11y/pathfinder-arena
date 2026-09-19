@@ -1021,3 +1021,123 @@ test("precise selection stays marked after edits and step announcements describe
     "Row 2, column 3, Sand, Entry cost 5",
   );
 });
+
+test("fast mouse or touch strokes remain connected and undo as one edit", async ({
+  page,
+  context,
+  isMobile,
+}) => {
+  await page.goto("/");
+  await enableDrawing(page);
+  await page.locator('[data-map="empty"]').click();
+  const empty = await snapshot(page, "astar");
+  const drag = async (from: number, to: number, leaveBoard = false) => {
+    const first = page.locator(`#astar-grid [data-index="${from}"]`);
+    // Keep both endpoints onscreen; scrolling only the first into view can
+    // leave the diagonal endpoint below a phone's viewport after clicking undo.
+    await first.evaluate((cell) => cell.scrollIntoView({ block: "center" }));
+    const a = (await first.boundingBox())!;
+    const b = (await page
+      .locator(`#astar-grid [data-index="${to}"]`)
+      .boundingBox())!;
+    const start = { x: a.x + a.width / 2, y: a.y + a.height / 2 };
+    const end = { x: b.x + b.width / 2, y: b.y + b.height / 2 };
+    const grid = (await page.locator("#astar-grid").boundingBox())!;
+    const points = leaveBoard ? [{ x: grid.x - 10, y: start.y }, end] : [end];
+    if (isMobile) {
+      const session = await context.newCDPSession(page);
+      await session.send("Input.dispatchTouchEvent", {
+        type: "touchStart",
+        touchPoints: [{ ...start, id: 1 }],
+      });
+      if (
+        (await page.locator("#edit-mode").getAttribute("aria-pressed")) ===
+        "true"
+      ) {
+        // A second contact and its release must not paint or end the first stroke.
+        await session.send("Input.dispatchTouchEvent", {
+          type: "touchStart",
+          touchPoints: [
+            { ...start, id: 1 },
+            { x: start.x + 10, y: start.y + 20, id: 2 },
+          ],
+        });
+        await session.send("Input.dispatchTouchEvent", {
+          type: "touchEnd",
+          touchPoints: [{ x: start.x + 10, y: start.y + 20, id: 2 }],
+        });
+      }
+      for (const point of points)
+        await session.send("Input.dispatchTouchEvent", {
+          type: "touchMove",
+          touchPoints: [{ ...point, id: 1 }],
+        });
+      await session.send("Input.dispatchTouchEvent", {
+        type: "touchEnd",
+        touchPoints: [],
+      });
+      await session.detach();
+    } else {
+      await page.mouse.move(start.x, start.y);
+      await page.mouse.down();
+      for (const point of points) await page.mouse.move(point.x, point.y);
+      await page.mouse.up();
+    }
+  };
+  await drag(72, 97);
+  for (const algorithm of algorithms)
+    expect((await snapshot(page, algorithm)).walls).toEqual(
+      Array.from({ length: 26 }, (_, i) => 72 + i),
+    );
+  await page.locator("#undo").click();
+  expect(await snapshot(page, "astar")).toEqual(empty);
+  await page.locator("#redo").click();
+  expect((await snapshot(page, "astar")).walls).toHaveLength(26);
+  await page.locator("#undo").click();
+  await drag(72, 216);
+  for (const algorithm of algorithms)
+    expect((await snapshot(page, algorithm)).walls).toEqual([
+      72, 73, 107, 108, 109, 143, 144, 145, 179, 180, 181, 215, 216,
+    ]);
+  await page.locator("#undo").click();
+  expect(await snapshot(page, "astar")).toEqual(empty);
+  await drag(72, 97, true);
+  expect((await snapshot(page, "astar")).walls).toEqual([72, 97]);
+  await page.locator("#undo").click();
+  expect(await snapshot(page, "astar")).toEqual(empty);
+  await page.locator("#edit-mode").click();
+  await drag(72, 97);
+  expect(await snapshot(page, "astar")).toEqual(empty);
+});
+
+test("PNG keeps the original map filename while encoding finishes", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await page.evaluate(() => {
+    const original = HTMLCanvasElement.prototype.toBlob;
+    HTMLCanvasElement.prototype.toBlob = function (callback, type, quality) {
+      original.call(
+        this,
+        (blob) => {
+          document.addEventListener("release-png", () => callback(blob), {
+            once: true,
+          });
+          document.documentElement.dataset.pngReady = "true";
+        },
+        type,
+        quality,
+      );
+    };
+  });
+  await page.locator("#export-image").click();
+  await expect(page.locator("html")).toHaveAttribute("data-png-ready", "true");
+  await page.locator("#seed").fill("99");
+  await page.locator("#regenerate").click();
+  await expect(page.locator("#seed")).toHaveValue("99");
+  const download = page.waitForEvent("download");
+  await page.evaluate(() => document.dispatchEvent(new Event("release-png")));
+  const image = await download;
+  expect(image.suggestedFilename()).toBe("pathfinder-42.png");
+  expect(await image.failure()).toBeNull();
+});

@@ -89,6 +89,59 @@ export function applyTool(board: Board, index: number, tool: Tool): Board {
   return edited;
 }
 
+/** Paint every cell touched between two cell centers. At an exact corner,
+ * include both side cells as well: diagonal walls must not leave pinholes.
+ * Endpoint tools move only to the final cell and never clear a whole trail. */
+export function applyStroke(
+  board: Board,
+  from: number,
+  to: number,
+  tool: Tool,
+): Board {
+  if (
+    !Number.isInteger(from) ||
+    from < 0 ||
+    from >= COLS * ROWS ||
+    !Number.isInteger(to) ||
+    to < 0 ||
+    to >= COLS * ROWS
+  )
+    return board;
+  if (tool === "start" || tool === "end") return applyTool(board, to, tool);
+  let x = from % COLS,
+    y = Math.floor(from / COLS);
+  const dx = (to % COLS) - x,
+    dy = Math.floor(to / COLS) - y;
+  const nx = Math.abs(dx),
+    ny = Math.abs(dy);
+  const sx = Math.sign(dx),
+    sy = Math.sign(dy);
+  let ix = 0,
+    iy = 0;
+  let next = applyTool(board, from, tool);
+  while (ix < nx || iy < ny) {
+    // Compare the next vertical/horizontal boundary crossing with integers.
+    const vertical = (2 * ix + 1) * ny;
+    const horizontal = (2 * iy + 1) * nx;
+    if (vertical === horizontal) {
+      next = applyTool(next, y * COLS + x + sx, tool);
+      next = applyTool(next, (y + sy) * COLS + x, tool);
+      x += sx;
+      y += sy;
+      ix++;
+      iy++;
+    } else if (vertical < horizontal) {
+      x += sx;
+      ix++;
+    } else {
+      y += sy;
+      iy++;
+    }
+    next = applyTool(next, y * COLS + x, tool);
+  }
+  return next;
+}
+
 type HistoryEntry = { snapshot: EditorSnapshot; encoded: string };
 
 function historyEntry(snapshot: EditorSnapshot): HistoryEntry {
